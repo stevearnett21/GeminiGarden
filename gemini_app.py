@@ -1,92 +1,89 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-import time
+from datetime import datetime, timedelta
+import google.generativeai as genai
+from PIL import Image
 
-# --- APP CONFIG & STYLE ---
-st.set_page_config(page_title="Gemini Garden | 2-Level Rise", page_icon="🌿", layout="wide")
+# --- 1. THE BRAIN: YOUR API KEY ---
+# I have put your specific key here so it works immediately!
+API_KEY = "AIzaSyB7AYrYO4baWUVggbWhL_mM5iWI_UOAjMI" 
+genai.configure(api_key=API_KEY)
 
-# Custom UI for the Man Cave
+# --- 2. APP CONFIG & STYLE ---
+st.set_page_config(page_title="Gemini Garden OS", page_icon="🌿", layout="wide")
+
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; color: #ffffff; }
-    .metric-box { border: 1px solid #4CAF50; padding: 15px; border-radius: 10px; background: #161b22; }
-    .quest-text { color: #FFD700; font-weight: bold; }
+    .stApp { background-color: #0b0e14; color: #e0e0e0; }
+    .status-card { padding: 15px; border-radius: 10px; background-color: #1c2128; border-left: 5px solid #4CAF50; margin-bottom: 20px; }
+    .bo-game { background-color: #2e3b4e; padding: 20px; border-radius: 15px; border: 2px dashed #FFD700; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- SESSION STATE INITIALIZATION ---
+# --- 3. SESSION STATE (Persistence) ---
 if 'history' not in st.session_state:
     st.session_state.history = []
-if 'bo_xp' not in st.session_state:
-    st.session_state.bo_xp = 0
+if 'xp' not in st.session_state:
+    st.session_state.xp = 0
 
-# --- HEADER ---
-st.title("🌿 The Gemini Garden OS")
-st.write(f"**User:** Steve | **Location:** 2-Level Rise | **System Date:** Jan 2026")
+# --- 4. MAIN DASHBOARD ---
+st.title("🌿 Gemini Garden OS v4.0")
+st.write(f"Hello Steve! Dashboard active for the St. Peters 2-Level Rise.")
 
-# --- SIDEBAR: BO'S QUEST ---
-with st.sidebar:
-    st.header("🏆 Bo Danger's Quest")
-    st.write(f"Current XP: **{st.session_state.bo_xp}**")
-    st.progress(min(st.session_state.bo_xp / 1000, 1.0))
-    if st.button("I checked the water! (+50 XP)"):
-        st.session_state.bo_xp += 50
-    if st.button("I harvested a leaf! (+100 XP)"):
-        st.session_state.bo_xp += 100
-
-# --- MAIN TABS ---
-tab1, tab2, tab3, tab4 = st.tabs(["🧪 Nutrient Lab", "📂 History", "📸 Live Eye", "🌱 Companion Map"])
+tab1, tab2, tab3 = st.tabs(["🧪 Nutrient Lab", "📸 Live Eye & Bo's Game", "📂 System Logs"])
 
 # --- TAB 1: NUTRIENT LAB ---
 with tab1:
-    st.header("Masterblend Dosing")
-    gallons = st.number_input("Gallons added:", 0.1, 12.0, 1.0)
+    st.header("Masterblend Mixing Station")
+    gallons = st.number_input("Gallons of water added:", 0.1, 12.0, 1.0)
     
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Masterblend", f"{gallons * 2.4:.1f}g")
-    col2.metric("Epsom Salt", f"{gallons * 1.2:.1f}g")
-    col3.metric("Cal-Nitrate", f"{gallons * 2.4:.1f}g")
+    st.markdown(f"""
+    <div class='status-card'>
+    <b>Masterblend (4-18-38):</b> {(gallons * 2.4):.1f}g<br>
+    <b>Epsom Salt:</b> {(gallons * 1.2):.1f}g<br>
+    <b>Calcium Nitrate:</b> {(gallons * 2.4):.1f}g <br>
+    <i>Order: Mix MB, then Epsom, then Calcium Nitrate ALWAYS LAST.</i>
+    </div>
+    """, unsafe_allow_html=True)
     
-    feed_note = st.text_input("Note (e.g., 'Full system clean')")
-    if st.button("Log & Deduct Inventory"):
-        entry = {
-            "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "Gallons": gallons,
-            "Note": feed_note
-        }
-        st.session_state.history.append(entry)
-        st.success("Feeding logged to the Black Box.")
+    if st.button("Log this Feeding"):
+        st.session_state.history.append({"Date": datetime.now().strftime("%Y-%m-%d"), "Type": "Feeding", "Gallons": gallons})
+        st.success("Feeding logged!")
 
-# --- TAB 2: HISTORY (THE BLACK BOX) ---
+# --- TAB 2: LIVE EYE AI ---
 with tab2:
-    st.header("Maintenance Log")
+    st.header("Real-Time AI Vision")
+    mode = st.radio("Select Mode:", ["Plant Doctor (Steve)", "Plant ID Game (Bo)"])
+    
+    img_file = st.camera_input("Scan the Garden")
+    
+    if img_file:
+        img = Image.open(img_file)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        with st.spinner("Gemini is analyzing the photo..."):
+            if mode == "Plant Doctor (Steve)":
+                prompt = "Analyze this hydroponic plant. Check for yellowing, brown tips (nutrient burn), or pests. Give advice specifically for a Rise Garden using Masterblend."
+            else:
+                prompt = "Identify this plant and ask a 7-year-old named Bo a fun question about it to help him learn. Be encouraging!"
+            
+            response = model.generate_content([prompt, img])
+            
+            st.subheader("AI Analysis Result:")
+            st.write(response.text)
+            
+            if mode == "Plant ID Game (Bo)":
+                st.session_state.xp += 100
+                st.balloons()
+                st.write(f"✨ **Bo earned 100 XP!** Total XP: {st.session_state.xp}")
+
+# --- TAB 3: SYSTEM LOGS ---
+with tab3:
+    st.header("Garden History")
     if st.session_state.history:
         st.table(pd.DataFrame(st.session_state.history))
     else:
-        st.info("No logs yet. Start by adding a feeding in the Nutrient Lab.")
-
-# --- TAB 3: LIVE EYE ---
-with tab3:
-    st.header("AI Vision Health Check")
-    img = st.camera_input("Scan your plants")
-    if img:
-        with st.spinner("Analyzing plant stress patterns..."):
-            time.sleep(2) # Simulating 2026 AI analysis
-            st.success("Analysis Complete!")
-            st.write("🟢 **Leaf Health:** 98% Optimal.")
-            st.write("⚠️ **Alert:** I see white crusting on pod #4. This is 'Nutrient Burn.' Dilute the tank with 1/2 gallon of fresh water.")
-
-# --- TAB 4: COMPANION MAP ---
-with tab4:
-    st.header("2-Level Planting Logic")
-    st.markdown("""
-    | Level | Best For | Gemini Tip |
-    | :--- | :--- | :--- |
-    | **Upper (Level 2)** | Peppers, Tall Herbs | More light here. Good for 'Bloom' stage plants. |
-    | **Lower (Level 1)** | Lettuce, Kale, Greens | Cooler temps. Keeps greens from 'bolting' too fast. |
-    """)
-    st.warning("🚨 **Pro Tip:** Keep Mint in its own tray. It's a 'bully' and will take over the water lines!")
-
-st.divider()
-st.caption("Final Build v3.0 | Secure Cloud Ready")
+        st.write("No logs yet. Start by logging a feeding!")
+    
+    st.divider()
+    st.write("🏆 **Bo's Current XP:**", st.session_state.xp)
